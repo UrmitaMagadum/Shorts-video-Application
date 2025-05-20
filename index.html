@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BOOM Video App</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #fafafc;
+      margin: 0;
+      padding: 20px;
+    }
+    .video-container {
+      aspect-ratio: 9 / 16;
+      max-height: 60vh;
+      background-color: #1e293b;
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      cursor: pointer;
+    }
+    .auth-input {
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 12px 16px;
+      width: 100%;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+    .auth-input:focus {
+      border-color: #3b82f6;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+    .btn-primary {
+      background-color: #3b82f6;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      font-size: 16px;
+    }
+    .btn-primary:hover {
+      background-color: #2563eb;
+    }
+    .like-button {
+      cursor: pointer;
+      transition: all 0.25s ease;
+      font-size: 20px;
+      color: white;
+      border: none;
+      background: none;
+      margin-left: 8px;
+    }
+    .like-button.liked {
+      color: #ef4444;
+      transform: scale(1.1);
+    }
+    .tab-active {
+      border-bottom: 2px solid #3b82f6;
+      color: #3b82f6;
+    }
+    .loader {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 3px solid #3b82f6;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    nav {
+      margin-top: 20px;
+      display: flex;
+      gap: 20px;
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: #fafafc;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    nav button.active {
+      border-bottom: 2px solid #3b82f6;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+  // Mock videos data
+  const mockVideos = [
+    {
+      id: 1,
+      title: "Sunset at the beach",
+      videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-waves-in-the-water-1164-large.mp4",
+      thumbnailUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
+      likes: 245,
+      views: 1024,
+      user: "alex_nature",
+      createdAt: "2023-10-15"
+    },
+    {
+      id: 2,
+      title: "City lights at night",
+      videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-city-traffic-on-a-rainy-night-1534-large.mp4",
+      thumbnailUrl: "https://images.unsplash.com/photo-1519501025264-65ba15a82390",
+      likes: 532,
+      views: 2341,
+      user: "urban_explorer",
+      createdAt: "2023-10-12"
+    }
+  ];
+
+  // Mock users
+  const mockUsers = [
+    { id: 1, email: "demo@example.com", password: "password123", name: "Demo User" }
+  ];
+
+  // State
+  const state = {
+    currentScreen: "auth", // auth, feed, upload, profile
+    authMode: "login", // login or register
+    isAuthenticated: false,
+    currentUser: null,
+    videos: [...mockVideos],
+    currentVideoIndex: 0,
+    likedVideos: new Set(),
+    isLoading: false
+  };
+
+  // Render function
+  function renderApp() {
+    const app = document.getElementById('app');
+    if(state.isLoading) {
+      app.innerHTML = '<div class="loader"></div>';
+      return;
+    }
+
+    switch(state.currentScreen) {
+      case "auth":
+        app.innerHTML = renderAuth();
+        break;
+      case "feed":
+        app.innerHTML = renderFeed();
+        break;
+      case "upload":
+        app.innerHTML = renderUpload();
+        break;
+      case "profile":
+        app.innerHTML = renderProfile();
+        break;
+      default:
+        app.innerHTML = renderAuth();
+    }
+
+    addEventListeners();
+  }
+
+  // Auth screen
+  function renderAuth() {
+    return `
+      <h1>BOOM</h1>
+      <div>
+        <button id="login-tab" class="${state.authMode === 'login' ? 'tab-active' : ''}">Login</button>
+        <button id="register-tab" class="${state.authMode === 'register' ? 'tab-active' : ''}">Register</button>
+      </div>
+      <form id="auth-form">
+        ${state.authMode === 'register' ? '<input id="name" type="text" placeholder="Name" class="auth-input" required />' : ''}
+        <input id="email" type="email" placeholder="Email" class="auth-input" required />
+        <input id="password" type="password" placeholder="Password" class="auth-input" required />
+        <button type="submit" class="btn-primary">${state.authMode === 'login' ? 'Login' : 'Register'}</button>
+      </form>
+    `;
+  }
+
+  // Feed screen
+  function renderFeed() {
+    if(state.videos.length === 0) {
+      return `<h2>Feed</h2><p>No videos found.</p>${renderNav()}`;
+    }
+
+    const currentVideo = state.videos[state.currentVideoIndex];
+    const liked = state.likedVideos.has(currentVideo.id);
+
+    return `
+      <h2>Feed</h2>
+      <div class="video-container">
+        <video id="video-player" src="${currentVideo.videoUrl}" poster="${currentVideo.thumbnailUrl}" autoplay muted loop></video>
+      </div>
+      <h3>${currentVideo.title}</h3>
+      <p>By @${currentVideo.user} • ${currentVideo.views} views</p>
+      <button id="like-btn" class="like-button ${liked ? 'liked' : ''}">${liked ? '♥' : '♡'} ${currentVideo.likes + (liked ? 1 : 0)}</button>
+      <div>
+        <button id="prev-btn" class="btn-primary">Previous</button>
+        <button id="next-btn" class="btn-primary">Next</button>
+      </div>
+      ${renderNav()}
+    `;
+  }
+
+  // Upload screen
+  function renderUpload() {
+    return `
+      <h2>Upload Video</h2>
+      <form id="upload-form">
+        <input id="upload-title" type="text" placeholder="Video Title" class="auth-input" required />
+        <input id="upload-video-url" type="url" placeholder="Video URL" class="auth-input" required />
+        <input id="upload-thumbnail-url" type="url" placeholder="Thumbnail URL" class="auth-input" required />
+        <button type="submit" class="btn-primary">Upload</button>
+      </form>
+      ${renderNav()}
+    `;
+  }
+
+  // Profile screen
+  function renderProfile() {
+    if(!state.currentUser) {
+      return `<p>No user logged in.</p>`;
+    }
+    return `
+      <h2>Profile</h2>
+      <p><strong>Name:</strong> ${state.currentUser.name}</p>
+      <p><strong>Email:</strong> ${state.currentUser.email}</p>
+      <button id="logout-btn" class="btn-primary">Logout</button>
+      ${renderNav()}
+    `;
+  }
+
+  // Navigation buttons
+  function renderNav() {
+    return `
+      <nav>
+        <button id="nav-feed" class="${state.currentScreen === 'feed' ? 'active' : ''}">Feed</button>
+        <button id="nav-upload" class="${state.currentScreen === 'upload' ? 'active' : ''}">Upload</button>
+        <button id="nav-profile" class="${state.currentScreen === 'profile' ? 'active' : ''}">Profile</button>
+      </nav>
+    `;
+  }
+
+  // Add event listeners
+  function addEventListeners() {
+    if(state.currentScreen === 'auth') {
+      document.getElementById('auth-form').addEventListener('submit', onAuthSubmit);
+      document.getElementById('login-tab').addEventListener('click', () => {
+        state.authMode = 'login';
+        renderApp();
+      });
+      document.getElementById('register-tab').addEventListener('click', () => {
+        state.authMode = 'register';
+        renderApp();
+      });
+    }
+
+    if(state.currentScreen === 'feed') {
+      document.getElementById('like-btn').addEventListener('click', toggleLike);
+      document.getElementById('prev-btn').addEventListener('click', () => {
+        state.currentVideoIndex = (state.currentVideoIndex - 1 + state.videos.length) % state.videos.length;
+        renderApp();
+      });
+      document.getElementById('next-btn').addEventListener('click', () => {
+        state.currentVideoIndex = (state.currentVideoIndex + 1) % state.videos.length;
+        renderApp();
+      });
+    }
+
+    if(state.currentScreen === 'upload') {
+      document.getElementById('upload-form').addEventListener('submit', onUploadSubmit);
+    }
+
+    if(state.currentScreen === 'profile') {
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        state.isAuthenticated = false;
+        state.currentUser = null;
+        state.currentScreen = 'auth';
+        renderApp();
+      });
+    }
+
+    document.getElementById('nav-feed')?.addEventListener('click', () => {
+      state.currentScreen = 'feed';
+      renderApp();
+    });
+
+    document.getElementById('nav-upload')?.addEventListener('click', () => {
+      state.currentScreen = 'upload';
+      renderApp();
+    });
+
+    document.getElementById('nav-profile')?.addEventListener('click', () => {
+      state.currentScreen = 'profile';
+      renderApp();
+    });
+  }
+
+  // Handle auth form submit
+  function onAuthSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
+
+    if(state.authMode === 'register') {
+      const name = document.getElementById('name').value.trim();
+      if(!name) {
+        alert('Please enter your name');
+        return;
+      }
+      if(mockUsers.find(u => u.email === email)) {
+        alert('Email already registered');
+        return;
+      }
+      const newUser = { id: mockUsers.length + 1, email, password, name };
+      mockUsers.push(newUser);
+      alert('Account created! Please login.');
+      state.authMode = 'login';
+      renderApp();
+    } else {
+      const user = mockUsers.find(u => u.email === email && u.password === password);
+      if(user) {
+        state.isAuthenticated = true;
+        state.currentUser = user;
+        state.currentScreen = 'feed';
+        renderApp();
+      } else {
+        alert('Invalid email or password');
+      }
+    }
+  }
+
+  // Handle upload form submit
+  function onUploadSubmit(e) {
+    e.preventDefault();
+    const title = document.getElementById('upload-title').value.trim();
+    const videoUrl = document.getElementById('upload-video-url').value.trim();
+    const thumbnailUrl = document.getElementById('upload-thumbnail-url').value.trim();
+
+    if(!title || !videoUrl || !thumbnailUrl) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    const newVideo = {
+      id: state.videos.length + 1,
+      title,
+      videoUrl,
+      thumbnailUrl,
+      likes: 0,
+      views: 0,
+      user: state.currentUser.name,
+      createdAt: new Date().toISOString().slice(0, 10)
+    };
+
+    state.videos.push(newVideo);
+    state.currentVideoIndex = state.videos.length - 1;
+    alert('Video uploaded successfully!');
+    state.currentScreen = 'feed';
+    renderApp();
+  }
+
+  // Toggle like
+  function toggleLike() {
+    const currentVideo = state.videos[state.currentVideoIndex];
+    if(state.likedVideos.has(currentVideo.id)) {
+      state.likedVideos.delete(currentVideo.id);
+    } else {
+      state.likedVideos.add(currentVideo.id);
+    }
+    renderApp();
+  }
+
+  // Initial render
+  renderApp();
+</script>
